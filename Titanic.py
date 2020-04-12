@@ -2,27 +2,70 @@ import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 
+def clean_data(data):
+    data["Fare"] = data["Fare"].fillna(data["Fare"].dropna().median())
+    data.loc[data["Name"].str.contains("Mr."), "Title"] = "Mr"
+    data.loc[data["Name"].str.contains("Mrs."), "Title"] = "Mrs"
+    data.loc[data["Name"].str.contains("Miss."), "Title"] = "Ms"
+    data.loc[data["Name"].str.contains("Master."), "Title"] = "Master"
+    data.loc[data["Name"].str.contains("Don."), "Title"] = "Royal"
+    data.loc[data["Name"].str.contains("Dona."), "Title"] = "Royal"
+    data.loc[data["Name"].str.contains("Rev."), "Title"] = "Special"
+    data.loc[data["Name"].str.contains("Major"), "Title"] = "Special"
+    data.loc[data["Name"].str.contains("Sir."), "Title"] = "Royal"
+    data.loc[data["Name"].str.contains("Lady."), "Title"] = "Royal"
+    data.loc[data["Name"].str.contains("Mme."), "Title"] = "Mrs"
+    data.loc[data["Name"].str.contains("Col."), "Title"] = "Special"
+    data.loc[data["Name"].str.contains("Ms."), "Title"] = "Ms"
+    data.loc[data["Name"].str.contains("Countess."), "Title"] = "Royal"
+    data.loc[data["Name"].str.contains("Capt."), "Title"] = "Special"
+    data.loc[data["Name"].str.contains("Dr."), "Title"] = "Special"
+    data.loc[data["Name"].str.contains("Mlle."), "Title"] = "Ms"
+    data.loc[data["Name"].str.contains("Jonkheer."), "Title"] = "Royal"
+    data.loc[(data["Title"] == 'Dr') & (data["Sex"] == 'female'), "Title"] = "Mrs"
+
+    data["Embarked"] = data["Embarked"].fillna("S")
+
+    data.loc[(data["Title"] == 'Master') & (data["Age"].isnull()), "Age"] = data.loc[data['Title'] == 'Master', "Age"].dropna().median()
+    data.loc[(data["Title"] == 'Mr') & (data["Age"].isnull()), "Age"] = data.loc[data['Title'] == 'Mr', "Age"].dropna().median()
+    data.loc[(data["Title"] == 'Ms') & (data["Age"].isnull()), "Age"] = data.loc[data['Title'] == 'Ms', "Age"].dropna().median()
+    data.loc[(data["Title"] == 'Mrs') & (data["Age"].isnull()), "Age"] = data.loc[data['Title'] == 'Mrs', "Age"].dropna().median()
+    data.loc[(data["Title"] == 'Royal') & (data["Age"].isnull()), "Age"] = data.loc[data['Title'] == 'Royal', "Age"].dropna().median()
+    data.loc[(data["Title"] == 'Special') & (data["Age"].isnull()), "Age"] = data.loc[data['Title'] == 'Special', "Age"].dropna().median()
+
+    data.loc[data["Age"] < 13, "Child"] = 1
+    data.loc[data["Age"] >= 13, "Child"] = 0
+
+    data.loc[data["Age"] >= 13, "YoungAdult"] = 1
+    data.loc[data["Age"] <= 20, "YoungAdult"] = 0
+
+    data.loc[data["Age"] > 20, "Adult"] = 1
+    data.loc[data["Age"] < 65, "Adult"] = 0
+
+    data.loc[data["Age"] >= 65, "Senior"] = 1
+    data.loc[data["Age"] < 65, "Senior"] = 0
+
+    data["Family"] = data["SibSp"]+data["Parch"]
+    data["IsAlone"] = data['Family'] == 0
+
+    data.loc[data["Sex"] == "male", "Sex"] = 0
+    data.loc[data["Sex"] == "female", "Sex"] = 1
+
+    return data
+
 #Read in the training dataset
 training  = pd.read_csv("train.csv")
 
 #Clean and derive new data
-training["Fare"] = training["Fare"].fillna(training["Fare"].dropna().median())
-training["Age"] = training["Age"].fillna(training["Age"].dropna().median())
-training["Family"] = training["SibSp"]+training["Parch"]
-
-training.loc[training["Sex"] == "male", "Sex"] = 0
-training.loc[training["Sex"] == "female", "Sex"] = 1
-
-training.loc[training["Age"] < 18, "IsChild"] = 1
-training.loc[training["Age"] >= 18, "IsChild"] = 0
+training = clean_data(training)
 
 #Set targets and features
 y = training["Survived"]
-features = ["Pclass", "Age", "Sex", "SibSp", "Parch", "IsChild", "Fare"]
+features = ["Pclass", "Age", "Sex", "SibSp", "Parch", "Family", "IsAlone", "Title","Child", "YoungAdult", "Adult", "Senior", "Fare", "Embarked"]
 X = pd.get_dummies(training[features])
 
 #set classifier
-classifier = RandomForestClassifier(n_estimators=500, max_depth=5, random_state=1)
+classifier = RandomForestClassifier(n_estimators=200, max_depth=14, random_state=1)
 classifier_ = classifier.fit(X, y)
 
 #Score model
@@ -34,15 +77,7 @@ test  = pd.read_csv("test.csv")
 ids = test["PassengerId"]
 ids = ids.to_frame()
 
-test["Fare"] = test["Fare"].fillna(test["Fare"].dropna().median())
-test["Age"] = test["Age"].fillna(test["Age"].dropna().median())
-test["Family"] = test["SibSp"]+test["Parch"]
-
-test.loc[test["Sex"] == "male", "Sex"] = 0
-test.loc[test["Sex"] == "female", "Sex"] = 1
-
-test.loc[test["Age"] < 18, "IsChild"] = 1
-test.loc[test["Age"] >= 18, "IsChild"] = 0
+test = clean_data(test)
 
 X_test = pd.get_dummies(test[features])
 
