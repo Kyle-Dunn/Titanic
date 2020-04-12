@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn import linear_model
+from sklearn.ensemble import RandomForestClassifier
 
 #Read in the training dataset
 training  = pd.read_csv("train.csv")
@@ -17,15 +17,16 @@ training.loc[training["Age"] < 18, "IsChild"] = 1
 training.loc[training["Age"] >= 18, "IsChild"] = 0
 
 #Set targets and features
-target = training["Survived"].values
-features = training[["Pclass", "Age", "Sex", "SibSp", "Parch", "IsChild", "Fare"]].values
+y = training["Survived"]
+features = ["Pclass", "Age", "Sex", "SibSp", "Parch", "IsChild", "Fare"]
+X = pd.get_dummies(training[features])
 
 #set classifier
-classifier = linear_model.LogisticRegression()
-classifier_ = classifier.fit(features, target)
+classifier = RandomForestClassifier(n_estimators=500, max_depth=5, random_state=1)
+classifier_ = classifier.fit(X, y)
 
 #Score model
-print(classifier_.score(features,target))
+print(classifier_.score(X,y))
 
 #Read in the training dataset
 test  = pd.read_csv("test.csv")
@@ -43,10 +44,12 @@ test.loc[test["Sex"] == "female", "Sex"] = 1
 test.loc[test["Age"] < 18, "IsChild"] = 1
 test.loc[test["Age"] >= 18, "IsChild"] = 0
 
-test = test.drop(columns=["Name", "Ticket", "Cabin", "Embarked", "PassengerId", "Family"])
+X_test = pd.get_dummies(test[features])
 
-results = classifier.predict(test)
+results = classifier.predict(X_test)
 
-ids.insert(1, "Survived", results, True)
+output = pd.DataFrame({'PassengerId': test.PassengerId, 'Survived': results})
 
-ids.to_csv('predictions.csv', index=False)
+print(output['Survived'].value_counts(normalize=True))
+
+output.to_csv('predictions.csv', index=False)
