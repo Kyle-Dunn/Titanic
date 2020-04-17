@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LassoCV
 
 def group_data(data):
     grouped_data = data.groupby(['Sex', 'Pclass', 'Title'])
@@ -26,6 +27,10 @@ def fix_age(data):
     data['Age'] = data.apply(lambda row:find_age(row, group_data(data)) if np.isnan(row['Age']) else row['Age'], axis=1)
 
     return data
+
+def rf_feat_importance(m, df):
+    return pd.DataFrame({'cols':df.columns, 'imp':m.feature_importances_}
+                       ).sort_values('imp', ascending=False)
 
 def clean_data(data):
     data["Fare"] = data["Fare"].fillna(data["Fare"].dropna().median())
@@ -63,9 +68,8 @@ def clean_data(data):
 
     data["Family"] = data["SibSp"]+data["Parch"]
     data.loc[data['Family'] == 0, "FamilySize"] = 'Alone'
-    data.loc[(data['Family'] > 0) & (data['Family'] < 3), "FamilySize"] = 'SmallFamily'
-    data.loc[(data['Family'] >= 3) & (data['Family'] <= 5), "FamilySize"] = 'MedFamily'
-    data.loc[data['Family'] > 5, "FamilySize"] = 'LargeFamily'
+    data.loc[(data['Family'] > 0) & (data['Family'] < 5), "FamilySize"] = 'SmallFamily'
+    data.loc[data['Family'] >= 5, "FamilySize"] = 'LargeFamily'
 
     return data
 
@@ -80,10 +84,18 @@ y = training["Survived"]
 features = ["Pclass", "Age", "Sex", "SibSp", "Parch", "FamilySize", "Title", "AgeGroup", "Fare", "Embarked", "Cabin"]
 X = pd.get_dummies(training[features])
 
-X.to_csv('X.csv', index=False)
-
 #set classifier
-classifier = RandomForestClassifier(n_estimators=200, min_samples_leaf=3, max_features=0.5, random_state=1)
+classifier = RandomForestClassifier(n_estimators=125, min_samples_leaf=3, max_depth=10, max_features=0.5)
+classifier_ = classifier.fit(X, y)
+
+importance = rf_feat_importance(classifier, X)
+print(importance)
+indexNames = importance[importance['imp'] >= 0.01].index
+print(indexNames)
+importance = importance.drop(indexNames)
+
+X = X.drop(importance['cols'], axis=1)
+
 classifier_ = classifier.fit(X, y)
 
 #Score model
@@ -99,7 +111,9 @@ test = clean_data(test)
 
 X_test = pd.get_dummies(test[features])
 
-X_test.to_csv('X_test.csv', index=False)
+X_test["Cabin_T"] = 0
+
+X_test = X_test.drop(importance['cols'], axis=1)
 
 results = classifier.predict(X_test)
 
