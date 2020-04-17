@@ -2,6 +2,31 @@ import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 
+def group_data(data):
+    grouped_data = data.groupby(['Sex', 'Pclass', 'Title'])
+    grouped_median = grouped_data.median()
+    grouped_median = grouped_median.reset_index()[['Sex', 'Pclass', 'Title', 'Age']]
+    
+    return grouped_median
+
+def find_age(row, data):
+    condition = (
+        (data['Sex'] == row['Sex']) &
+        (data['Title'] == row['Title']) &
+        (data['Pclass'] == row['Pclass']))
+
+    if np.isnan(data[condition]['Age'].values[0]):
+        condition = (
+            (data['Sex'] == row['Sex']) &
+            (data['Pclass'] == row['Pclass']))
+    
+    return data[condition]['Age'].values[0] 
+
+def fix_age(data):
+    data['Age'] = data.apply(lambda row:find_age(row, group_data(data)) if np.isnan(row['Age']) else row['Age'], axis=1)
+
+    return data
+
 def clean_data(data):
     data["Fare"] = data["Fare"].fillna(data["Fare"].dropna().median())
     data.loc[data["Name"].str.contains("Mr."), "Title"] = "Mr"
@@ -26,30 +51,21 @@ def clean_data(data):
 
     data["Embarked"] = data["Embarked"].fillna("S")
 
-    data.loc[(data["Title"] == 'Master') & (data["Age"].isnull()), "Age"] = data.loc[data['Title'] == 'Master', "Age"].dropna().median()
-    data.loc[(data["Title"] == 'Mr') & (data["Age"].isnull()), "Age"] = data.loc[data['Title'] == 'Mr', "Age"].dropna().median()
-    data.loc[(data["Title"] == 'Ms') & (data["Age"].isnull()), "Age"] = data.loc[data['Title'] == 'Ms', "Age"].dropna().median()
-    data.loc[(data["Title"] == 'Mrs') & (data["Age"].isnull()), "Age"] = data.loc[data['Title'] == 'Mrs', "Age"].dropna().median()
-    data.loc[(data["Title"] == 'Royal') & (data["Age"].isnull()), "Age"] = data.loc[data['Title'] == 'Royal', "Age"].dropna().median()
-    data.loc[(data["Title"] == 'Special') & (data["Age"].isnull()), "Age"] = data.loc[data['Title'] == 'Special', "Age"].dropna().median()
+    data = fix_age(data)
 
-    data.loc[data["Age"] < 13, "Child"] = 1
-    data.loc[data["Age"] >= 13, "Child"] = 0
+    data.Cabin.fillna('U', inplace = True)
+    data['Cabin'] = data['Cabin'].map(lambda c: c[0])
 
-    data.loc[data["Age"] >= 13, "YoungAdult"] = 1
-    data.loc[data["Age"] <= 20, "YoungAdult"] = 0
-
-    data.loc[data["Age"] > 20, "Adult"] = 1
-    data.loc[data["Age"] < 65, "Adult"] = 0
-
-    data.loc[data["Age"] >= 65, "Senior"] = 1
-    data.loc[data["Age"] < 65, "Senior"] = 0
+    data.loc[data["Age"] < 13, "AgeGroup"] = 'Child'
+    data.loc[(data["Age"] >= 13) & (data["Age"] <= 20), "AgeGroup"] = 'YoungAdult'
+    data.loc[(data["Age"] > 20) & (data["Age"] < 65), "AgeGroup"] = 'Adult'
+    data.loc[data["Age"] > 65, "AgeGroup"] = 'Senior'
 
     data["Family"] = data["SibSp"]+data["Parch"]
-    data["IsAlone"] = data['Family'] == 0
-
-    data.loc[data["Sex"] == "male", "Sex"] = 0
-    data.loc[data["Sex"] == "female", "Sex"] = 1
+    data.loc[data['Family'] == 0, "FamilySize"] = 'Alone'
+    data.loc[(data['Family'] > 0) & (data['Family'] < 3), "FamilySize"] = 'SmallFamily'
+    data.loc[(data['Family'] >= 3) & (data['Family'] <= 5), "FamilySize"] = 'MedFamily'
+    data.loc[data['Family'] > 5, "FamilySize"] = 'LargeFamily'
 
     return data
 
@@ -61,11 +77,13 @@ training = clean_data(training)
 
 #Set targets and features
 y = training["Survived"]
-features = ["Pclass", "Age", "Sex", "SibSp", "Parch", "Family", "IsAlone", "Title","Child", "YoungAdult", "Adult", "Senior", "Fare", "Embarked"]
+features = ["Pclass", "Age", "Sex", "SibSp", "Parch", "FamilySize", "Title", "AgeGroup", "Fare", "Embarked", "Cabin"]
 X = pd.get_dummies(training[features])
 
+X.to_csv('X.csv', index=False)
+
 #set classifier
-classifier = RandomForestClassifier(n_estimators=200, max_depth=14, random_state=1)
+classifier = RandomForestClassifier(n_estimators=200, min_samples_leaf=3, max_features=0.5, random_state=1)
 classifier_ = classifier.fit(X, y)
 
 #Score model
@@ -80,6 +98,8 @@ ids = ids.to_frame()
 test = clean_data(test)
 
 X_test = pd.get_dummies(test[features])
+
+X_test.to_csv('X_test.csv', index=False)
 
 results = classifier.predict(X_test)
 
